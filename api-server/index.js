@@ -3,12 +3,13 @@ const { generateSlug } = require('random-word-slugs');
 const { ECSClient, RunTaskCommand} = require('@aws-sdk/client-ecs')
 const { Server, Socket } = require('socket.io');
 const Reis = require('ioredis');
+require('dotenv').config()
 
-const subscriber = new Redis('rediss://default:AVNS_a5YD8X7wp_hdX5NULwT@redis-2fa52b53-rudra-techs123.a.aivencloud.com:20559');
+const subscriber = new Redis(process.env.REDIS_CONNECTION_URI);
 
 const app = express();
 const io = new Server( { cors: '*' } );
-const PORT = 9000;
+const PORT = process.env.PORT | 9000;
 
 io.on('connection', socket => {
     socket.on('subscribe', channel => {
@@ -22,17 +23,9 @@ io.listen(9001, () => {
 })
 
 const ecsClient = new ECSClient({
-    region: '',
-    credentials: {
-        accessKeyId: '',
-        secretAccessKey: ''
-    }
+    region: process.env.AWS_REGION,
+    credentials: process.env.AWS_CREDENTIALS
 })
-
-const config = {
-    CLUSTER: '',
-    TASK: ''
-}
 
 app.use(express.json());
 
@@ -42,8 +35,8 @@ app.post('/project', async (req, res) => {
 
     // Spin the container
     const command = new RunTaskCommand({
-        cluster: config.CLUSTER,
-        taskDefinition: config.TASK,
+        cluster: process.env.CLUSTER,
+        taskDefinition: process.env.TASK,
         launchType: 'FARGATE',
         count: 1,
         networkConfiguration: {
@@ -71,7 +64,7 @@ app.post('/project', async (req, res) => {
         status: 'queued',
         date: {
             projectSlug, 
-            url: `http://${projectSlug}.locahost:8000`
+            url: `http://${projectSlug}.localhost:8000`
         }
     })
 }) 
