@@ -27,7 +27,7 @@ const PORT = process.env.PORT | 9000;
 
 const kafka = new Kafka({
     clientId: `api-server`,
-    brokers: process.env.KAFKA_BROKER,
+    brokers: [process.env.KAFKA_BROKER],
     ssl: {
         ca: [fs.readFileSync(path.join(__dirname, 'kafka.pem'), 'utf-8')],
     },
@@ -89,7 +89,7 @@ app.post('/project', async (req, res) => {
 
     const { name, gitURL } = data;
 
-    const project = prisma.project.create({
+    const project = await prisma.project.create({
         data: {
             name,
             gitURL,
@@ -104,7 +104,7 @@ app.post('/project', async (req, res) => {
 });
 
 app.post('/deploy', async (req, res) => {
-    const { projectId } = req.body;
+    const { projectId, subDomain } = req.body;
 
     const project = await prisma.project.findUnique({
         where: {
@@ -134,17 +134,17 @@ app.post('/deploy', async (req, res) => {
         networkConfiguration: {
             awsvpcConfiguration: {
                 assignPublicIp: 'ENABLED',
-                subnets: [],
-                securityGroups: []
+                subnets: process.env.SUBNETS.split(','),
+                securityGroups: process.env.SECURITY_GROUPS
             }
         },
         overrides: {
             containerOverrides: [
                 {
-                    name: 'build-sevice',
+                    name: 'build-image',
                     environment: [
                         { name: 'GIT_REPO_URL', value: project.gitURL },
-                        { name: 'PROJECT_ID', value: projectId },
+                        { name: 'SUB_DOMAIN', value: subDomain },
                         { name: 'DEPLOYEMENT_ID', value: deployement.id },
                     ]
                 }
@@ -163,7 +163,7 @@ app.post('/deploy', async (req, res) => {
 
 async function InitKafkaConsumer() {
     await consumer.connect();
-    await consumer.subscribe({ topic: ['container-logs'] });
+    await consumer.subscribe({ topic: 'container-logs' });
 
     await consumer.run({
         autoCommit: false,

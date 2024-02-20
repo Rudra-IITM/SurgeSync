@@ -22,8 +22,8 @@ model Project {
   id           String        @id @default(uuid())
   name         String
   gitURL       String        @map("git_url")
-  subDomain    String        @unique @map("sub_domain")
-  customDomain String?       @map("custom_domain")
+  subDomain    String        @map("sub_domain")
+  customDomain String        @map("custom_domain")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   Deployement  Deployement[]

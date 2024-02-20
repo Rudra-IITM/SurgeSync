@@ -12,11 +12,9 @@ const s3Client = new S3Client({
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY_ID,
     },
-    endpoint: process.env.AWS_S3_ENDPOINT,
-    s3ForcePathStyle: true, // Uncomment if you are not using localstack
 })
 
-const PROJECT_ID = process.env.PROJECT_ID
+const SUB_DOMAIN = process.env.SUB_DOMAIN
 const DEPLOYEMENT_ID = process.env.DEPLOYEMENT_ID;
 
 const kafka = new Kafka({
@@ -35,7 +33,7 @@ const kafka = new Kafka({
 const producer = kafka.producer();
 
 async function publishLog(log) {
-    await producer.send({ topic: `container-logs`, messages: [{ key: 'log', value: JSON.stringify({ PROJECT_ID, DEPLOYEMENT_ID, log }) }] })
+    await producer.send({ topic: `container-logs`, messages: [{ key: 'log', value: JSON.stringify({ SUB_DOMAIN, DEPLOYEMENT_ID, log }) }] })
 }
 
 async function init() {
@@ -73,7 +71,7 @@ async function init() {
 
             const command = new PutObjectCommand({
                 Bucket: process.env.AWS_BUCKET,
-                Key: `__outputs/${PROJECT_ID}/${file}`,
+                Key: `__outputs/${SUB_DOMAIN}/${file}`,
                 Body: fs.createReadStream(filePath),
                 ContentType: mime.lookup(filePath)
             })
