@@ -25,6 +25,14 @@ const app = express();
 const io = new Server({ cors: '*' });
 const PORT = process.env.PORT | 9000;
 
+io.on('connection', socket => {
+    socket.on('subscribe', channel => {
+        socket.join(channel)
+    })
+})
+
+io.listen(9002, () => console.log('Socket Server 9002'))
+
 const kafka = new Kafka({
     clientId: `api-server`,
     brokers: [process.env.KAFKA_BROKER],
@@ -40,17 +48,6 @@ const kafka = new Kafka({
 
 const consumer = kafka.consumer({ groupId: 'api-server-logs-consumer' });
 
-io.on('connection', socket => {
-    socket.on('subscribe', channel => {
-        socket.join(channel);
-        socket.emit('message', `Joined ${channel}`);
-    })
-})
-
-io.listen(9001, () => {
-    console.log(`Socket server running at port 9001`)
-})
-
 const ecsClient = new ECSClient({
     region: process.env.AWS_REGION,
     credentials: process.env.AWS_CREDENTIALS
@@ -59,13 +56,26 @@ const ecsClient = new ECSClient({
 app.use(express.json());
 app.use(cors());
 
-app.get('/logs:id', async (req, res) => {
+app.get('/logs/:id', async (req, res) => {
     const { id } = req.params;
     const logs = await client.query({
-        query: `SELECT event_id, deployement_id, log, timesatmp FROM log_events WHERE deployement_id = {deployement_id: String}`,
+        query: `SELECT event_id, deployment_id, log, timestamp FROM log_events WHERE deployment_id = {deployment_id: String}`,
         query_params: {
-            deployement_id: id
+            deployment_id: id
         },
+        format: 'JSONEachRow'
+    });
+
+    const rawLogs = await logs.json();
+    return res.json({
+        status: 'success',
+        data: rawLogs
+    })
+});
+
+app.get('/logs', async (req, res) => {
+    const logs = await client.query({
+        query: `SELECT event_id, deployment_id, log, timestamp FROM log_events`,
         format: 'JSONEachRow'
     });
 
@@ -118,7 +128,7 @@ app.post('/deploy', async (req, res) => {
         });
     }
 
-    const deployement = await prisma.deployement.create({
+    const deployment = await prisma.deployement.create({
         data: {
             projectId: project.id,
             status: 'QUEUED'
@@ -145,7 +155,7 @@ app.post('/deploy', async (req, res) => {
                     environment: [
                         { name: 'GIT_REPO_URL', value: project.gitURL },
                         { name: 'SUB_DOMAIN', value: subDomain },
-                        { name: 'DEPLOYEMENT_ID', value: deployement.id },
+                        { name: 'DEPLOYEMENT_ID', value: deployment.id },
                     ]
                 }
             ]
@@ -156,7 +166,8 @@ app.post('/deploy', async (req, res) => {
     return res.json({
         status: 'queued',
         data: {
-            deployementId: deployement.id
+            deploymentId: deployment.id,
+            url: `http://${subDomain}.localhost:8000`
         }
     })
 })
@@ -174,12 +185,13 @@ async function InitKafkaConsumer() {
                 const stringMsg = message.value.toString();
                 const { PROJECT_ID, DEPLOYEMENT_ID, log } = JSON.parse(stringMsg);
                 console.log('Received Log:', log);
+                io.emit('log', log);
                 const { query_id } = await client.insert({
                     table: 'log_events',
                     values: [
                         {
                             event_id: uuidv4(),
-                            deployement_id: DEPLOYEMENT_ID,
+                            deployment_id: DEPLOYEMENT_ID,
                             log: log
                         }
                     ],
